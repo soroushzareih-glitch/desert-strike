@@ -1,0 +1,155 @@
+<!DOCTYPE html><html lang="fa"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><title>Desert Strike</title><style>
+*{margin:0;box-sizing:border-box;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none}
+body{overflow:hidden;background:#000;font:bold 13px sans-serif;color:#fff}
+canvas{display:block}
+.u{position:fixed;pointer-events:none}
+.b{position:fixed;border-radius:50%;background:rgba(255,255,255,.22);border:2px solid #fffa;display:flex;align-items:center;justify-content:center;z-index:5}
+#jb{left:24px;bottom:24px;width:140px;height:140px}
+#jk{width:56px;height:56px;border-radius:50%;background:#fff8;pointer-events:none}
+#hud{top:10px;left:10px;width:170px}
+#hpb{height:14px;background:#0008;border:1px solid #fff;margin-top:4px}
+#hpf{height:100%;width:100%;background:#3c3}
+#wi{top:10px;right:10px;text-align:right;text-shadow:0 0 3px #000;line-height:1.5}
+#ch{top:50%;left:50%;width:14px;height:14px;margin:-7px;border:2px solid #fff9;border-radius:50%}
+#sc{inset:0;display:none;background:radial-gradient(circle at 50% 50%,transparent 30%,#000 31%)}
+#sc:after{content:"";position:absolute;left:10%;top:50%;width:80%;height:1px;background:#000}
+#msg{top:20%;width:100%;text-align:center;font-size:16px;text-shadow:0 0 4px #000}
+#hv{inset:0;background:rgba(255,0,0,.45);opacity:0}
+#lk{position:fixed;right:0;top:0;width:60%;height:100%}
+#dead{position:fixed;inset:0;background:#600c;display:none;align-items:center;justify-content:center;font-size:26px;z-index:9;text-align:center}
+</style></head><body>
+<div id="lk"></div>
+<div id="sc" class="u"></div><div id="hv" class="u"></div><div id="ch" class="u"></div>
+<div id="hud" class="u">سلامتی<div id="hpb"><div id="hpf"></div></div></div>
+<div id="wi" class="u"></div><div id="msg" class="u"></div>
+<div id="jb" class="b"><div id="jk"></div></div>
+<div id="dead">مُردی — برای شروع دوباره لمس کن</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const R=THREE,$=id=>document.getElementById(id);
+const scene=new R.Scene();scene.background=new R.Color(0xe8c99a);scene.fog=new R.Fog(0xe8c99a,60,330);
+const cam=new R.PerspectiveCamera(75,innerWidth/innerHeight,.1,600);cam.rotation.order='YXZ';scene.add(cam);
+const ren=new R.WebGLRenderer({antialias:false});ren.setPixelRatio(Math.min(devicePixelRatio,1.5));ren.setSize(innerWidth,innerHeight);document.body.insertBefore(ren.domElement,document.body.firstChild);
+addEventListener('resize',()=>{ren.setSize(innerWidth,innerHeight);cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix()});
+scene.add(new R.HemisphereLight(0xfff2d6,0x9a7b4f,.95));const sun=new R.DirectionalLight(0xffffff,.7);sun.position.set(50,100,30);scene.add(sun);
+const sm=(a,b,x)=>{x=Math.max(0,Math.min(1,(x-a)/(b-a)));return x*x*(3-2*x)};
+const H=(x,z)=>(Math.sin(x*.03)*Math.cos(z*.04)*9+Math.sin(x*.08+z*.06)*2.5)*sm(60,110,Math.hypot(x,z));
+const mat=c=>new R.MeshLambertMaterial({color:c,flatShading:true});
+const box=(w,h,d,c,x=0,y=0,z=0,p)=>{const m=new R.Mesh(new R.BoxGeometry(w,h,d),mat(c));m.position.set(x,y,z);(p||scene).add(m);return m};
+const tg=new R.PlaneGeometry(700,700,90,90);tg.rotateX(-Math.PI/2);const pa=tg.attributes.position;
+for(let i=0;i<pa.count;i++)pa.setY(i,H(pa.getX(i),pa.getZ(i)));tg.computeVertexNormals();
+scene.add(new R.Mesh(tg,mat(0xd2a864)));
+const W=[
+{n:'کلت M1911',d:22,r:.35,m:8,s:.012,z:1.4,L:.3,c:0x555555,t:0},
+{n:'دزرت ایگل',d:45,r:.6,m:7,s:.008,z:1.5,L:.35,c:0x888888,t:0},
+{n:'اسنایپر AWM',d:110,r:1.6,m:5,s:.001,z:6,L:.9,c:0x2f4a2f,t:2},
+{n:'اسنایپر Kar98',d:80,r:1.1,m:5,s:.002,z:4,L:.85,c:0x6b4a2a,t:2},
+{n:'AK-47',d:28,r:.11,m:30,s:.03,z:2,L:.7,c:0x5a3a1a,t:1},
+{n:'M4',d:22,r:.08,m:30,s:.022,z:2,L:.65,c:0x333333,t:1},
+{n:'UZI',d:16,r:.06,m:25,s:.045,z:1.6,L:.45,c:0x222222,t:1}];
+// map
+const walls=[],wm=[],loot=[],hc=[[0,-25],[35,15],[-40,10],[20,-60],[-30,-55],[50,-35]];
+function wall(x,z,w,d,h,c){const m=box(w,h,d,c,x,h/2,z);wm.push(m);walls.push({x1:x-w/2,x2:x+w/2,z1:z-d/2,z2:z+d/2})}
+function crate(x,z,ty,w){const c=ty=='w'?0xffc400:ty=='a'?0x3fa83f:0xe03030;loot.push({m:box(.7,.7,.7,c,x,H(x,z)+.5,z),ty,w})}
+hc.forEach(([x,z],k)=>{const c=[0xc9a56b,0xb98c5a,0xd8b98a][k%3],Wd=12,D=10,h=4;
+wall(x,z-D/2,Wd,.4,h,c);wall(x-Wd/2,z,.4,D,h,c);wall(x+Wd/2,z,.4,D,h,c);wall(x-3.75,z+D/2,4.5,.4,h,c);wall(x+3.75,z+D/2,4.5,.4,h,c);
+box(3,1,.4,c,x,h-.5,z+D/2);box(Wd+1,.4,D+1,0x7a4a2a,x,h+.2,z);box(Wd,.1,D,0x5a4a3a,x,.05,z);
+crate(x-3,z-2,'w',k);crate(x+3,z-2,k%2?'a':'h')});
+const free=(x,z)=>hc.every(h=>Math.hypot(x-h[0],z-h[1])>14);
+for(let i=0;i<80;i++){const x=Math.random()*600-300,z=Math.random()*600-300;if(!free(x,z))continue;const y=H(x,z);
+if(i%2){const g=new R.Group();box(.5,4,.5,0x6b4a2a,0,2,0,g);const t=new R.Mesh(new R.DodecahedronGeometry(2.2,0),mat(0x6b7a3a));t.position.y=4.3;t.scale.y=.6;g.add(t);g.position.set(x,y,z);scene.add(g);walls.push({x1:x-.4,x2:x+.4,z1:z-.4,z2:z+.4})}
+else{const s=1+Math.random()*3,r=new R.Mesh(new R.DodecahedronGeometry(s,0),mat(0x8a7560));r.position.set(x,y+s*.4,z);r.rotation.y=Math.random()*6;scene.add(r);walls.push({x1:x-s*.75,x2:x+s*.75,z1:z-s*.75,z2:z+s*.75})}}
+for(let i=0;i<14;i++){const x=Math.random()*400-200,z=Math.random()*400-200;if(free(x,z))crate(x,z,i==0?'w':['w','a','h','a'][i%4],i==0?6:Math.floor(Math.random()*7))}
+function push(p,r){for(const w of walls){const cx=Math.max(w.x1,Math.min(p.x,w.x2)),cz=Math.max(w.z1,Math.min(p.z,w.z2));let dx=p.x-cx,dz=p.z-cz,d=Math.hypot(dx,dz);if(d<r){if(d<1e-4){dx=1;dz=0;d=1}p.x+=dx/d*(r-d);p.z+=dz/d*(r-d)}}}
+// plane, chute, car
+const planeG=new R.Group();box(16,3,3,0xdddddd,0,0,0,planeG);box(4,.4,24,0xcccccc,0,0,0,planeG);box(2,4,.4,0xcc3333,-7,2.5,0,planeG);planeG.position.set(-280,260,0);scene.add(planeG);
+const canopy=new R.Mesh(new R.SphereGeometry(4,10,6,0,Math.PI*2,0,Math.PI/2),new R.MeshLambertMaterial({color:0xdd3333,side:R.DoubleSide}));canopy.visible=false;scene.add(canopy);
+const car={g:new R.Group(),h:0,v:0};box(2.2,.8,4,0x3c6e3c,0,.9,0,car.g);box(1.9,.7,2,0x2a4f2a,0,1.65,.4,car.g);box(1.6,.3,.1,0xffffaa,0,1,-2,car.g);
+[[-1.2,1.3],[1.2,1.3],[-1.2,-1.3],[1.2,-1.3]].forEach(([x,z])=>{const w=new R.Mesh(new R.CylinderGeometry(.5,.5,.4,10),mat(0x111111));w.rotation.z=Math.PI/2;w.position.set(x,.5,z);car.g.add(w)});
+car.g.position.set(8,H(8,12),12);scene.add(car.g);
+// guns
+function gm(w){const g=new R.Group(),L=w.L;box(.07,.1,L,w.c,0,0,0,g);box(.03,.03,L*.5,0x222222,0,.02,-L*.7,g);box(.05,.16,.07,0x222222,0,-.12,L*.1,g);
+if(w.t>0)box(.06,.12,.22,0x553311,0,-.03,L*.6,g);
+if(w.t==2){const s=new R.Mesh(new R.CylinderGeometry(.03,.03,.3,8),mat(0x111111));s.rotation.x=Math.PI/2;s.position.y=.09;g.add(s)}
+g.position.set(.22,-.2,-.5);g.visible=false;cam.add(g);return g}
+const gms=W.map(gm),flash=box(.09,.09,.09,0xffee66,.22,-.17,-1,cam);flash.visible=false;
+// enemies
+const es=[];
+function mkE(x,z){const e={hp:100,cd:1,a:1,t:0,g:new R.Group(),parts:[],w:[x,z]};
+const a=(w,h,d,c,x,y,z,hd)=>{const m=box(w,h,d,c,x,y,z,e.g);m.userData={e,head:hd};e.parts.push(m)};
+a(.8,1,.5,0x4a5560,0,1.3,0);a(.5,.45,.45,0x8a929c,0,2.05,0,1);a(.4,.1,.05,0xff3322,0,2.08,-.23,1);a(.25,.8,.3,0x333a40,-.22,.4,0);a(.25,.8,.3,0x333a40,.22,.4,0);a(.2,.8,.2,0x4a5560,-.55,1.3,0);a(.15,.15,.8,0x111111,.5,1.45,-.4);
+e.g.position.set(x,H(x,z),z);es.push(e)}
+[[-25,-40],[45,0],[-45,30],[25,-75]].forEach(p=>mkE(...p));
+// state
+const P=new R.Vector3(-280,261.5,0);let st='plane',yaw=-Math.PI/2,pit=0,vy=0,on=0,hp=100,dead=0,mt=0,kick=0,fcd=0,rl=0,fireH=0,scoped=false,zoom=1;
+const inv=[];let cur=-1;const joy={x:0,y:0},act={},bt={};
+const say=(t,s=2)=>{$('msg').textContent=t;mt=s};
+function setZoom(){zoom=scoped&&cur>=0?W[inv[cur].i].z:1;cam.fov=75/zoom;cam.updateProjectionMatrix();$('sc').style.display=scoped&&zoom>=4?'block':'none'}
+function pick(L){if(L.ty=='h'){hp=Math.min(100,hp+40);say('+ سلامتی')}else if(L.ty=='a'){inv.forEach(o=>o.res+=W[o.i].m*2);say('+ مهمات')}
+else{const o=inv.find(o=>o.i==L.w);if(o)o.res+=W[L.w].m*2;else{inv.push({i:L.w,mag:W[L.w].m,res:W[L.w].m*2});cur=inv.length-1;rl=0;scoped=false;setZoom()}say(W[L.w].n)}}
+function reload(){const o=inv[cur];if(o&&rl<=0&&o.res>0&&o.mag<W[o.i].m){rl=1.6;scoped=false;setZoom()}}
+function swap(){if(inv.length>1){cur=(cur+1)%inv.length;rl=0;scoped=false;setZoom()}}
+function scope(){if(cur>=0&&(st=='ground'||st=='chute')){scoped=!scoped;setZoom()}}
+function jump(){if(st=='plane'){st='fall';vy=0}else if(st=='fall')st='chute';else if(st=='ground'&&on)vy=8}
+function veh(){if(st=='car'){st='ground';P.x=car.g.position.x+Math.cos(car.h)*3;P.z=car.g.position.z-Math.sin(car.h)*3;P.y=H(P.x,P.z)+1.7;yaw=car.h;car.v=0}
+else if(st=='ground'&&Math.hypot(P.x-car.g.position.x,P.z-car.g.position.z)<7){st='car';scoped=false;setZoom()}}
+const ray=new R.Raycaster(),v3=new R.Vector3();
+function hurt(n){if(dead)return;hp-=n;$('hv').style.opacity=.8;if(hp<=0){hp=0;dead=1;$('dead').style.display='flex'}}
+function kill(e){e.a=0;scene.remove(e.g);const p=e.g.position;crate(p.x,p.z,'w',Math.floor(Math.random()*7));crate(p.x+1.5,p.z,'a');crate(p.x-1.5,p.z,'h');
+say(es.some(e=>e.a)?'ربات نابود شد! لوت رها شد':'همه ربات‌ها نابود شدند 🎉',4)}
+function shoot(){const o=inv[cur];if(!o||rl>0||fcd>0||!(st=='ground'||st=='chute'))return;if(o.mag<=0){reload();return}
+const w=W[o.i],sp=w.s*(scoped?.3:1);o.mag--;fcd=w.r;kick=1;flash.position.z=-.5-w.L;flash.visible=true;setTimeout(()=>flash.visible=false,50);
+v3.set((Math.random()-.5)*sp*2,(Math.random()-.5)*sp*2,-1).applyQuaternion(cam.quaternion).normalize();
+ray.set(cam.position,v3);ray.far=160;const h=ray.intersectObjects([...wm,...es.filter(e=>e.a).flatMap(e=>e.parts)])[0];
+if(h&&h.object.userData.e){const e=h.object.userData.e;e.hp-=w.d*(h.object.userData.head?2:1);if(e.hp<=0)kill(e);else say('✦',.3)}
+if(o.mag<=0)reload()}
+// controls
+const jb=$('jb');let jid=null;
+function jm(e){const r=jb.getBoundingClientRect(),L=r.width/2;let dx=e.clientX-r.left-L,dy=e.clientY-r.top-L;const m=Math.hypot(dx,dy);if(m>L){dx*=L/m;dy*=L/m}joy.x=dx/L;joy.y=dy/L;$('jk').style.transform=`translate(${dx}px,${dy}px)`}
+jb.onpointerdown=e=>{jid=e.pointerId;jb.setPointerCapture(jid);jm(e)};jb.onpointermove=e=>{if(e.pointerId==jid)jm(e)};
+jb.onpointerup=jb.onpointercancel=()=>{jid=null;joy.x=joy.y=0;$('jk').style.transform=''};
+const lk=$('lk'),lp={};lk.onpointerdown=e=>{lk.setPointerCapture(e.pointerId);lp[e.pointerId]=[e.clientX,e.clientY]};
+lk.onpointermove=e=>{const l=lp[e.pointerId];if(!l)return;const s=.005/zoom;yaw-=(e.clientX-l[0])*s;pit=Math.max(-1.3,Math.min(1.3,pit-(e.clientY-l[1])*s));l[0]=e.clientX;l[1]=e.clientY};
+lk.onpointerup=lk.onpointercancel=e=>delete lp[e.pointerId];
+act.f=d=>fireH=d;act.j=d=>d&&jump();act.r=d=>d&&reload();act.s=d=>d&&swap();act.z=d=>d&&scope();act.v=d=>d&&veh();
+[['f','شلیک',24,34,90],['j','پرش',130,40,62],['r','ریلود',24,138,62],['s','تعویض',96,120,62],['z','اسکوپ',24,212,62],['v','سوار',96,194,62]].forEach(([k,t,r,b,s])=>{
+const d=document.createElement('div');d.className='b';d.textContent=t;d.style.cssText=`right:${r}px;bottom:${b}px;width:${s}px;height:${s}px`;document.body.appendChild(d);bt[k]=d;
+d.onpointerdown=e=>{e.preventDefault();d.style.background='rgba(255,255,255,.5)';act[k](1)};d.onpointerup=d.onpointercancel=d.onpointerleave=()=>{d.style.background='';act[k](0)}});
+$('dead').onclick=()=>location.reload();
+// loop
+function update(dt){if(dead)return;
+const mv=new R.Vector3(-Math.sin(yaw),0,-Math.cos(yaw)).multiplyScalar(-joy.y).add(new R.Vector3(Math.cos(yaw),0,-Math.sin(yaw)).multiplyScalar(joy.x));
+planeG.position.x+=35*dt;if(planeG.position.x>300)planeG.position.x=-300;
+if(st=='plane')P.set(planeG.position.x,planeG.position.y+1.5,0);
+else if(st=='fall'){vy=Math.max(vy-22*dt,-48);P.addScaledVector(mv,14*dt);P.y+=vy*dt;if(P.y-H(P.x,P.z)<100){st='chute';say('چتر باز شد')}}
+else if(st=='chute'){vy=-6;P.addScaledVector(mv,9*dt);P.y+=vy*dt;if(P.y<=H(P.x,P.z)+1.7){st='ground';vy=0;say('فرود موفق! دنبال اسلحه بگرد',4)}}
+else if(st=='ground'){P.addScaledVector(mv,6*dt);push(P,.5);vy-=22*dt;P.y+=vy*dt;const g=H(P.x,P.z)+1.7;on=0;if(P.y<=g){P.y=g;vy=0;on=1}}
+else{const c=car.g,ox=c.position.x,oz=c.position.z;car.v+=-joy.y*20*dt;car.v-=car.v*.9*dt;car.v=Math.max(-8,Math.min(25,car.v));
+car.h-=joy.x*1.6*dt*Math.max(-1,Math.min(1,car.v/4));
+const nx=ox-Math.sin(car.h)*car.v*dt,nz=oz-Math.cos(car.h)*car.v*dt;c.position.x=nx;c.position.z=nz;push(c.position,1.6);
+if(Math.abs(c.position.x-nx)+Math.abs(c.position.z-nz)>.02)car.v*=.4;
+c.position.y=H(c.position.x,c.position.z);c.rotation.y=car.h;P.set(c.position.x,c.position.y+1.2,c.position.z);
+let df=car.h-yaw;df=Math.atan2(Math.sin(df),Math.cos(df));if(Math.abs(car.v)>1)yaw+=df*Math.min(1,dt*1.5)}
+P.x=Math.max(-330,Math.min(330,P.x));P.z=Math.max(-330,Math.min(330,P.z));
+if(st=='car'){const c=car.g.position;cam.position.set(c.x+Math.sin(yaw)*9,Math.max(c.y+4-pit*8,H(c.x,c.z)+1),c.z+Math.cos(yaw)*9);cam.lookAt(c.x,c.y+1.5,c.z)}
+else{cam.position.copy(P);cam.rotation.set(pit,yaw,0)}
+canopy.visible=st=='chute';canopy.position.set(P.x,P.y+6.5,P.z);
+fcd-=dt;kick=Math.max(0,kick-dt*8);
+if(rl>0){rl-=dt;if(rl<=0){const o=inv[cur],n=Math.min(W[o.i].m-o.mag,o.res);o.mag+=n;o.res-=n}}
+if(fireH)shoot();
+const cg=cur>=0?inv[cur].i:-1;gms.forEach((g,j)=>{g.visible=j==cg&&st!='car'&&!(scoped&&zoom>=4);g.position.z=-.5+kick*.06});
+for(let i=loot.length-1;i>=0;i--){const L=loot[i];L.m.rotation.y+=dt;if((st=='ground')&&Math.hypot(P.x-L.m.position.x,P.z-L.m.position.z)<2){pick(L);scene.remove(L.m);loot.splice(i,1)}}
+es.forEach(e=>{if(!e.a)return;const g=e.g,pp=g.position,dx=P.x-pp.x,dz=P.z-pp.z,d=Math.hypot(dx,dz);let mx=0,mz=0,sp=0;
+if((st=='ground'||st=='car'||st=='chute')&&d<75){g.rotation.y=Math.atan2(-dx,-dz);if(d>14){sp=3.5;mx=dx;mz=dz}e.cd-=dt;
+if(e.cd<=0&&d<70){e.cd=.7+Math.random()*.4;ray.set(new R.Vector3(pp.x,pp.y+1.8,pp.z),new R.Vector3(dx,P.y-pp.y-1.8,dz).normalize());ray.far=d;
+if(!ray.intersectObjects(wm).length&&Math.random()<(st=='car'?.25:.5))hurt(6+Math.random()*4)}}
+else{e.t-=dt;const wx=e.w[0]-pp.x,wz=e.w[1]-pp.z;if(e.t<0||Math.hypot(wx,wz)<2){e.w=[Math.random()*400-200,Math.random()*400-200];e.t=8}else{sp=2;mx=wx;mz=wz;g.rotation.y=Math.atan2(-wx,-wz)}}
+if(sp){const l=Math.hypot(mx,mz)||1;pp.x+=mx/l*sp*dt;pp.z+=mz/l*sp*dt;push(pp,.6)}pp.y=H(pp.x,pp.z)});
+if(mt>0){mt-=dt;if(mt<=0)$('msg').textContent=''}
+$('hv').style.opacity=Math.max(0,$('hv').style.opacity-dt*2);$('hpf').style.width=hp+'%';$('hpf').style.background=hp>50?'#3c3':hp>25?'#ec3':'#e33';
+const o=inv[cur];$('wi').innerHTML=(o?W[o.i].n+'<br>'+(rl>0?'ریلود...':o.mag+' / '+o.res):'بدون اسلحه')+'<br>ربات‌ها: '+es.filter(e=>e.a).length;
+bt.v.textContent=st=='car'?'پیاده':'سوار';$('ch').style.display=st=='car'||(scoped&&zoom>=4)?'none':'block'}
+let last=performance.now();
+(function loop(){requestAnimationFrame(loop);const t=performance.now(),dt=Math.min(.05,(t-last)/1000);last=t;update(dt);ren.render(scene,cam)})();
+say('دکمه «پرش» را بزن تا از هواپیما بپری',8);
+</script></body></html>
